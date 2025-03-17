@@ -90,10 +90,15 @@
 			// Otherwise we keep the selected_index the same if the
 			// gallery has at least as many elements as it did before
 		} else {
-			selected_index =
-				selected_index != null && value != null && selected_index < value.length
-					? selected_index
-					: null;
+			if (selected_index == null) {
+				selected_index = null
+			} else if (value != null && selected_index < value.length) {
+				selected_index = selected_index
+			} else if (value != null && selected_index > value.length - 1) {
+				selected_index = value.length - 1
+			} else {
+				selected_index = null
+			}
 		}
 		dispatch("change");
 		prev_value = value;
