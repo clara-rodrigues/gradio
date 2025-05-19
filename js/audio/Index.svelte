@@ -19,6 +19,7 @@
 	export let visible = true;
 	export let interactive: boolean;
 	export let value: null | FileData = null;
+	export let segment_tags: any = null;
 	export let sources:
 		| ["microphone"]
 		| ["upload"]
@@ -95,6 +96,16 @@
 
 		value = initial_value;
 	};
+
+	function handleIncomingValue(detail: any) {
+		if (detail && "path" in detail) {
+			value = detail.path;
+			segment_tags = detail.segment_tags || null;
+		} else {
+			value = null;
+			segment_tags = null;
+		}
+	}
 
 	$: {
 		if (JSON.stringify(value) !== JSON.stringify(old_value)) {
@@ -232,9 +243,10 @@
 			{show_label}
 			{show_download_button}
 			{value}
+			{segment_tags}
 			on:change={({ detail }) => (value = detail)}
 			on:stream={({ detail }) => {
-				value = detail;
+				handleIncomingValue(detail);
 				gradio.dispatch("stream", value);
 			}}
 			on:drag={({ detail }) => (dragging = detail)}

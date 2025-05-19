@@ -12,6 +12,7 @@
 	import { createEventDispatcher } from "svelte";
 
 	import Hls from "hls.js";
+	import { fade } from "svelte/transition";
 
 	export let value: null | FileData = null;
 	$: url = value?.url;
@@ -29,6 +30,10 @@
 	export let mode = "";
 	export let loop: boolean;
 	export let handle_reset_value: () => void = () => {};
+	export let segment_tags: Record<
+		string,
+		Array<Array<string | number>>
+	> | null = null;
 
 	let container: HTMLDivElement;
 	let waveform: WaveSurfer | undefined;
@@ -44,6 +49,13 @@
 	let audio_player: HTMLAudioElement;
 
 	let stream_active = false;
+
+	let hoveredRegion: {
+		start: number;
+		end: number;
+		comment?: string;
+		id: string;
+	} | null = null;
 
 	const dispatch = createEventDispatcher<{
 		stop: undefined;
@@ -194,6 +206,30 @@
 		}
 	}
 
+	let latestCommentUpdate: { id: string; comment: string | undefined } | null =
+		null;
+
+	function updateComment(arg: typeof hoveredRegion) {
+		console.log("CHANGE COMMENT");
+		if (arg) {
+			latestCommentUpdate = {
+				id: arg.id,
+				comment: arg.comment
+			};
+		}
+	}
+
+	function handleRegionHover(
+		e: CustomEvent<{ start: number; end: number; content?: string; id: string }>
+	) {
+		hoveredRegion = {
+			start: e.detail.start,
+			end: e.detail.end,
+			comment: e.detail.content,
+			id: e.detail.id
+		};
+	}
+
 	$: load_stream(value);
 
 	onMount(() => {
@@ -261,7 +297,57 @@
 			{waveform_options}
 			{trim_region_settings}
 			{editable}
+			{segment_tags}
+			on:region_hover={handleRegionHover}
+			update_region_comment={latestCommentUpdate}
 		/>
+		<div class="regions-container">
+			<div class="regions-table-wrapper" transition:fade>
+				<table class="regions-table">
+					<thead>
+						<tr>
+							<th>Start</th>
+							<th>End</th>
+							<th>Comments</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>
+								{#if hoveredRegion}
+									<input
+										type="text"
+										bind:value={hoveredRegion.start}
+										class="input-field"
+										readonly
+									/>
+								{/if}
+							</td>
+							<td>
+								{#if hoveredRegion}
+									<input
+										type="text"
+										bind:value={hoveredRegion.end}
+										class="input-field"
+										readonly
+									/>
+								{/if}
+							</td>
+							<td>
+								{#if hoveredRegion}
+									<textarea
+										bind:value={hoveredRegion.comment}
+										class="textarea-field"
+										placeholder="No comment"
+										on:change={(event) => updateComment(hoveredRegion)}
+									/>
+								{/if}
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
 	</div>
 {/if}
 
@@ -315,5 +401,46 @@
 
 	.hidden {
 		display: none;
+	}
+	.regions-container {
+		margin-top: 1rem;
+		width: 100%;
+	}
+
+	.regions-table {
+		width: 100%;
+		border-collapse: collapse;
+		margin-top: 0.5rem;
+	}
+
+	.regions-table th,
+	.regions-table td {
+		padding: 0.5rem;
+		border: 1px solid var(--neutral-200);
+		text-align: left;
+	}
+
+	.regions-table th {
+		background-color: var(--neutral-100);
+	}
+
+	.regions-table tr:hover {
+		background-color: var(--neutral-50);
+	}
+
+	.regions-table-wrapper {
+		display: flex;
+		gap: 1rem;
+		align-items: flex-start;
+	}
+
+	.input-field,
+	.textarea-field {
+		width: 100%;
+		padding: 0.3rem;
+		border: 1px solid var(--neutral-300);
+		border-radius: 4px;
+		font-size: 0.9rem;
+		resize: vertical;
 	}
 </style>

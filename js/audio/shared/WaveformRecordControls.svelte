@@ -259,9 +259,12 @@
 	:global(::part(region)) {
 		border-radius: var(--radius-md);
 		height: 98% !important;
-		border: 1px solid var(--trim-region-color);
+		border: 1px solid var(--region-color, var(--trim-region-color));
 		background-color: unset;
 		border-width: 1px 3px;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
 
 	:global(::part(region))::after {
@@ -271,7 +274,7 @@
 		left: 0;
 		width: 100%;
 		height: 100%;
-		background: var(--trim-region-color);
+		background: var(--region-color, var(--trim-region-color));
 		opacity: 0.2;
 		border-radius: var(--radius-md);
 	}

@@ -42,6 +42,10 @@
 	export let uploading = false;
 	export let recording = false;
 	export let class_name = "";
+	export let segment_tags: Record<
+		string,
+		Array<Array<string | number>>
+	> | null = null;
 
 	let time_limit: number | null = null;
 	let stream_state: "open" | "waiting" | "closed" = "closed";
@@ -315,6 +319,7 @@
 			{editable}
 			{loop}
 			interactive
+			{segment_tags}
 			on:stop
 			on:play
 			on:pause

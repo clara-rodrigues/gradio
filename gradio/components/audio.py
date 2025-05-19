@@ -112,6 +112,7 @@ class Audio(
         waveform_options: WaveformOptions | dict | None = None,
         loop: bool = False,
         recording: bool = False,
+        segment_tags: dict[str, list[list[str | float]]] | None = None,
     ):
         """
         Parameters:
@@ -142,6 +143,7 @@ class Audio(
             waveform_options: A dictionary of options for the waveform display. Options include: waveform_color (str), waveform_progress_color (str), show_controls (bool), skip_length (int), trim_region_color (str). Default is None, which uses the default values for these options. [See `gr.WaveformOptions` docs](#waveform-options).
             loop: If True, the audio will loop when it reaches the end and continue playing from the beginning.
             recording: If True, the audio component will be set to record audio from the microphone if the source is set to "microphone". Defaults to False.
+            segment_tags: A dictionary of time-aligned annotations (e.g., word or phone segments) used when editable and interactive are both True, with entries formatted as [utterance_id, confidence, start_time, duration, label]
         """
         valid_sources: list[Literal["upload", "microphone"]] = ["upload", "microphone"]
         if sources is None:
@@ -185,6 +187,8 @@ class Audio(
             else show_share_button
         )
         self.editable = editable
+        if self.editable is True:
+            self.segment_tags = segment_tags
         if waveform_options is None:
             self.waveform_options = WaveformOptions()
         elif isinstance(waveform_options, dict):
@@ -224,16 +228,22 @@ class Audio(
         return "https://github.com/gradio-app/gradio/raw/main/test/test_files/audio_sample.wav"
 
     def preprocess(
-        self, payload: FileData | None
+        self, payload: FileData | dict | None
     ) -> str | tuple[int, np.ndarray] | None:
         """
         Parameters:
-            payload: audio data as a FileData object, or None.
+            payload: audio data as a FileData object, a dict expecting keys 'audio' (FileData) and optional 'segment_tags' (list of str), or None.
         Returns:
             passes audio as one of these formats (depending on `type`): a `str` filepath, or `tuple` of (sample rate in Hz, audio data as numpy array). If the latter, the audio data is a 16-bit `int` array whose values range from -32768 to 32767 and shape of the audio data array is (samples,) for mono audio or (samples, channels) for multi-channel audio.
         """
         if payload is None:
             return payload
+
+        if isinstance(payload, dict):
+            audio = payload.get("audio")
+            segment_tags = payload.get("segment_tags")
+            self.segment_tags = segment_tags
+            payload = audio
 
         if not payload.path:
             raise ValueError("payload path missing")
@@ -279,13 +289,19 @@ class Audio(
     ) -> FileData | bytes | None:
         """
         Parameters:
-            value: expects audio data in any of these formats: a `str` or `pathlib.Path` filepath or URL to an audio file, or a `bytes` object (recommended for streaming), or a `tuple` of (sample rate in Hz, audio data as numpy array). Note: if audio is supplied as a numpy array, the audio will be normalized by its peak value to avoid distortion or clipping in the resulting audio.
+            value: expects audio data in any of these formats: a `str` or `pathlib.Path` filepath or URL to
+            an audio file, or a `bytes` object (recommended for streaming), or a `tuple` of (sample rate in Hz,
+            audio data as numpy array). Note: if audio is supplied as a numpy array, the audio will be normalized
+            by its peak value to avoid distortion or clipping in the resulting audio.
         Returns:
-            FileData object, bytes, or None.
+            A `dict` containing a `FileData` object under 'file' key and optional 'segment_tags' (if present),
+            0r `bytes` (if streaming),
+            or `None` if no input was provided.
         """
         orig_name = None
         if value is None:
             return None
+        segment_tags = getattr(self, "segment_tags", None)
 
         if isinstance(value, bytes):
             if self.streaming:
@@ -294,6 +310,8 @@ class Audio(
                 value, "audio", cache_dir=self.GRADIO_CACHE
             )
             orig_name = Path(file_path).name
+            file_data = FileData(path=file_path, orig_name=orig_name)
+            return {"file": file_data, "segment_tags": segment_tags}
         elif isinstance(value, tuple):
             sample_rate, data = value
             file_path = processing_utils.save_audio_to_cache(
@@ -303,6 +321,8 @@ class Audio(
                 cache_dir=self.GRADIO_CACHE,
             )
             orig_name = Path(file_path).name
+            file_data = FileData(path=file_path, orig_name=orig_name)
+            return {"file": file_data, "segment_tags": segment_tags}
         elif isinstance(value, (str, Path)):
             original_suffix = Path(value).suffix.lower()
             if self.format is not None and original_suffix != f".{self.format}":
@@ -313,9 +333,10 @@ class Audio(
             else:
                 file_path = str(value)
             orig_name = Path(file_path).name if Path(file_path).exists() else None
+            file_data = FileData(path=file_path, orig_name=orig_name)
+            return {"file": file_data, "segment_tags": segment_tags}
         else:
             raise ValueError(f"Cannot process {value} as Audio")
-        return FileData(path=file_path, orig_name=orig_name)
 
     @staticmethod
     def _convert_to_adts(data: bytes):
